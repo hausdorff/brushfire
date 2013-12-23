@@ -5,12 +5,10 @@ import com.twitter.scalding.typed.TypedSink
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
-class TestJob(args : Args) extends Job(args)
-  with BrushfireJob[String,Short,
-                    (Long,Long),
-                    Map[Short,(Long,Long)],
-                    Split]
-  {
+class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,(Long,Long), Map[Short,(Long,Long)], Split] {
+
+  lazy val learner = new TestLearner
+
   val trainingData =
     TypedPipe
       .from(TextLine(args("input")))
@@ -20,9 +18,18 @@ class TestJob(args : Args) extends Job(args)
     .map{tree => tree.dump}
     .write(TypedSink(TextLine("/dev/null")))
 
-  implicit lazy val statsSemigroup = Semigroup.mapSemigroup[Short,(Long,Long)]
-  implicit lazy val splitOrdering = Ordering.by[Split,Double]{_.llr}
-  implicit lazy val featureOrdering = Ordering.by[String,String](identity)
+  def parseTrainingData(line : String) = {
+    val shorts = line.split("\t").map{_.toShort}.toList
+    val label = if(shorts.head == 1) (1L,0L) else (0L,1L)
+    (Map(shorts.tail.zipWithIndex.map{case (v,i) => ("abcdefg"(i).toString, v)} : _*), label)
+  }
+}
+
+class TestLearner extends Learner[String,Short,(Long,Long), Map[Short,(Long,Long)], Split]{
+
+  val statsSemigroup = Semigroup.mapSemigroup[Short,(Long,Long)]
+  val splitOrdering = Ordering.by[Split,Double]{_.llr}
+  val featureOrdering = Ordering.by[String,String](identity)
 
   def buildStats(value : Short, label : (Long,Long)) = {
     Map(value -> label)
@@ -41,12 +48,6 @@ class TestJob(args : Args) extends Job(args)
     }
 
   def extendTree(split : Split, leaf : Node[String,Short]) = split.extend(leaf)
-
-  def parseTrainingData(line : String) = {
-    val shorts = line.split("\t").map{_.toShort}.toList
-    val label = if(shorts.head == 1) (1L,0L) else (0L,1L)
-    (Map(shorts.tail.zipWithIndex.map{case (v,i) => ("abcdefg"(i).toString, v)} : _*), label)
-  }
 }
 
 case class Split(feature : String, value : Short, lte: (Long,Long), gt: (Long,Long)) {
