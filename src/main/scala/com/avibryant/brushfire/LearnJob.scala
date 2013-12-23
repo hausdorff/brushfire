@@ -5,26 +5,25 @@ import com.twitter.scalding.typed.TypedSink
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
- class LearnJob(args : Args) extends Job(args) {
-  implicit val splitSemigroup = new Semigroup[Split] {
-    def plus(a : Split, b: Split) = if(a.p > b.p) a else b
-  }
+ trait LearnJob[T,S] extends Job {
+  implicit val splitSemigroup = Semigroup.from[Split]{(a,b) => if(a.p > b.p) a else b}
+  implicit def statsSemigroup : Semigroup[S]
 
   def expandTree(
-    trainingData: TypedPipe[(Map[String,Short], (Long,Long))],
+    trainingData: TypedPipe[(Map[String,Short], T)],
     tree : ValuePipe[Tree]) : ValuePipe[Tree] = {
       val newTree =
         trainingData
           .flatMapWithValue(tree) {(data, treeOpt) =>
             val leaves = treeOpt.get.leaves
-            val (row, stats) = data
+            val (row, target) = data
             leaves
               .zipWithIndex
               .find{case (leaf, index) => leaf.includes(row)}
               .toList
               .flatMap {case (leaf, index) =>
                 row.map {case (feature,value) =>
-                    (index, feature) -> Map(value -> stats)
+                    (index, feature) -> stats(feature, value, target)
                 }
               }
           }
@@ -43,9 +42,23 @@ import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
         ComputedValue(newTree)
     }
 
-    expandTree(readTrainingData, expandTree(readTrainingData, LiteralValue(EmptyTree)))
-      .map{tree => tree.dump}
-      .write(TypedSink(TextLine("/dev/null")))
+  def stats(feature : String, value : Short, target : T) : S
+  def splits(feature : String, stats : S) : Iterable[Split]
+}
+
+class TestJob(args : Args) extends Job(args) with LearnJob[(Long,Long),Map[Short,(Long,Long)]] {
+  val trainingData =
+    TypedPipe
+      .from(TextLine(args("input")))
+      .map{line => parseTrainingData(line)}
+
+  expandTree(trainingData, expandTree(trainingData, LiteralValue(EmptyTree)))
+    .map{tree => tree.dump}
+    .write(TypedSink(TextLine("/dev/null")))
+
+  implicit lazy val statsSemigroup = Semigroup.mapSemigroup[Short,(Long,Long)]
+
+  def stats(feature : String, value : Short, target : (Long,Long)) = Map(value -> target)
 
   def splits(feature : String, stats : Map[Short,(Long,Long)]) : Iterable[Split]
     = {
@@ -58,9 +71,6 @@ import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
         Split(feature, value, acc, Group.minus(total, acc))
       }
     }
-
-  def readTrainingData
-    = TypedPipe.from(TextLine(args("input"))).map{line => parseTrainingData(line)}
 
   def parseTrainingData(line : String) = {
     val shorts = line.split("\t").map{_.toShort}.toList
