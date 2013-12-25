@@ -1,5 +1,7 @@
 package com.avibryant.brushfire
 
+import com.twitter.algebird._
+
 sealed trait Node[K,V] {
   def includes(row : Map[K,V]) : Boolean
   def withAncestors : Set[Node[K,V]]
@@ -21,18 +23,20 @@ case class SplitNode[K,V]
       def withAncestors = parent.withAncestors + this
 }
 
-case class Tree[K,V](leaves : List[Node[K,V]]) {
-  def allNodes = leaves.toSet.flatMap{n : Node[K,V] => n.withAncestors}
+case class Tree[K,V,O](leaves : Seq[(Node[K,V],O)])(implicit m : Monoid[O]) {
+  type N = Node[K,V]
+
+  def allNodes = leaves.map{_._1}.toSet.flatMap{n : N => n.withAncestors}
 
   def dump {
     val childMap = com.twitter.algebird.Monoid.sum(allNodes.map{
-      case Root() => Map[Node[K,V],Set[Node[K,V]]]()
-      case n : SplitNode[K,V] => Map(n.parent -> Set[Node[K,V]](n))
+      case Root() => Map[N,Set[N]]()
+      case n : SplitNode[K,V] => Map(n.parent -> Set[N](n))
     })
     dumpMap(childMap, Root[K,V], 0)
   }
 
-  def dumpMap(map : Map[Node[K,V],Set[Node[K,V]]], root : Node[K,V], indent : Int) {
+  def dumpMap(map : Map[N,Set[N]], root : N, indent : Int) {
     print(" " * indent)
     root match {
       case Root() => println("root")
@@ -42,10 +46,10 @@ case class Tree[K,V](leaves : List[Node[K,V]]) {
         println(pred)
       }
     }
-    map.getOrElse(root, Set[Node[K,V]]()).foreach{c => dumpMap(map, c, indent+1)}
+    map.getOrElse(root, Set[N]()).foreach{c => dumpMap(map, c, indent+1)}
   }
 }
 
 object Tree {
-  def empty[K,V] = Tree(List(Root[K,V]))
+  def empty[K,V,O](implicit m : Monoid[O]) = Tree(List(Root[K,V] -> m.zero))
 }

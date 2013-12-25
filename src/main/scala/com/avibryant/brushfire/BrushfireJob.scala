@@ -4,31 +4,34 @@ import com.twitter.scalding._
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
-trait Learner[K,V,L,S,P] {
+trait Learner[V,L,S,O] {
   def statsSemigroup : Semigroup[S]
-  def featureOrdering : Ordering[K]
-  def splitOrdering : Ordering[P]
+  def predictionMonoid : Monoid[O]
 
   def buildStats(value : V, label : L) : S
-  def findSplits(feature : K, stats : S) : Iterable[P]
-  def extendTree(split : P, leaf : Node[K,V]) : Iterable[Node[K,V]]
+  def findSplits(stats : S) : Iterable[Split[V,O]]
 }
 
-trait BrushfireJob[K,V,L,S,P] extends Job {
-  type MyTree = Tree[K,V]
-  type MyNode = Node[K,V]
-  type Row = Map[K,V]
-  type LabeledRow = (Row,L)
+trait Scorer[L,O,C] {
+  def scoreSemigroup : Semigroup[C]
 
-  def learner : Learner[K,V,L,S,P]
+  def scoreLabel(label : L, prediction: O) : C
+}
 
-  implicit lazy val ss = learner.statsSemigroup
-  implicit lazy val fo = learner.featureOrdering
-  implicit lazy val so = learner.splitOrdering
+case class Split[V,O](goodness : Double, predicates : Iterable[(V=>Boolean,O)])
+
+trait BrushfireJob[K,V,L,S,O] extends Job {
+  def learner : Learner[V,L,S,O]
 
   def expandTree(
-    trainingData: TypedPipe[LabeledRow],
-    tree : ValuePipe[MyTree]) : ValuePipe[MyTree] = {
+    trainingData: TypedPipe[(Map[K,V],L)],
+    tree : ValuePipe[Tree[K,V,O]])(implicit ko : Ordering[K])
+     : ValuePipe[Tree[K,V,O]] = {
+
+      implicit val ss = learner.statsSemigroup
+      implicit val pm = learner.predictionMonoid
+      implicit val splitSemigroup = Semigroup.from[(K,Split[V,O])]{(a,b) => if(a._2.goodness > b._2.goodness) a else b}
+
       val newTree =
         trainingData
           .flatMapWithValue(tree) {(data, treeOpt) =>
@@ -41,27 +44,38 @@ trait BrushfireJob[K,V,L,S,P] extends Job {
           .group
           .sum
           .flatMap{case ((index, feature), stats) =>
-            learner.findSplits(feature, stats).map{split => Map(index -> Max(split))}
+            learner.findSplits(stats).map{split => Map(index -> (feature,split))}
           }
           .groupAll
           .sum
           .values
           .mapWithValue(tree){ (map, treeOpt) =>
             val newLeaves =
-              for(tree <- treeOpt.toList;
-                  (index,Max(split)) <- map.toList;
-                  leaf <- learner.extendTree(split, tree.leaves(index)))
-                    yield leaf
+              treeOpt
+                .get
+                .leaves
+                .zipWithIndex
+                .flatMap{case((leaf,prediction),index) =>
+                  map.get(index) match {
+                    case Some((feature,split)) => split.predicates.map{
+                      case (predicate,prediction) =>
+                        val node = SplitNode(leaf, feature, predicate)
+                        node -> prediction
+                      }
+                    case None => List(leaf -> prediction)
+                  }
+                }
+
             Tree(newLeaves)
           }
         ComputedValue(newTree)
     }
 
-  def leafIndexFor(row : Row, tree : MyTree) : Iterable[Int] =
+  def leafIndexFor(row : Map[K,V], tree : Tree[K,V,O]) : Iterable[Int] =
     tree
       .leaves
       .zipWithIndex
-      .find{case (leaf, index) => leaf.includes(row)}
+      .find{case ((leaf,prediction), index) => leaf.includes(row)}
       .map{_._2}
       .toList
 }

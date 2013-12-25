@@ -5,7 +5,7 @@ import com.twitter.scalding.typed.TypedSink
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
-class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,(Long,Long), Map[Short,(Long,Long)], Split] {
+class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
 
   lazy val learner = new TestLearner
 
@@ -20,39 +20,44 @@ class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,(Lon
 
   def parseTrainingData(line : String) = {
     val shorts = line.split("\t").map{_.toShort}.toList
-    val label = if(shorts.head == 1) (1L,0L) else (0L,1L)
+    val label = (shorts.head == 1)
     (Map(shorts.tail.zipWithIndex.map{case (v,i) => ("abcdefg"(i).toString, v)} : _*), label)
   }
 }
 
-class TestLearner extends Learner[String,Short,(Long,Long), Map[Short,(Long,Long)], Split]{
+class TestLearner(implicit
+    val statsSemigroup : Semigroup[Map[Short,(Long,Long)]],
+    val predictionMonoid : Monoid[(Long,Long)])
+ extends Learner[Short, Boolean, Map[Short,(Long,Long)], (Long,Long)]{
 
-  val statsSemigroup = Semigroup.mapSemigroup[Short,(Long,Long)]
-  val splitOrdering = Ordering.by[Split,Double]{_.llr}
-  val featureOrdering = Ordering.by[String,String](identity)
-
-  def buildStats(value : Short, label : (Long,Long)) = {
-    Map(value -> label)
+  def buildStats(value : Short, label : Boolean) = {
+    Map(value -> (if(label) (1L,0L) else (0L,1L)))
   }
 
-  def findSplits(feature : String, stats : Map[Short,(Long,Long)]) : Iterable[Split]
-    = {
-      val total = Monoid.sum(stats.values)
-      val statsList = stats.toList.sortBy{_._1}
-      var acc = (0L,0L)
+  def findSplits(stats : Map[Short,(Long,Long)]) = {
+    val total = Monoid.sum(stats.values)
+    val statsList = stats.toList.sortBy{_._1}
+    var lte = (0L,0L)
 
-      statsList.map{case (value, stats) =>
-        acc = Monoid.plus(acc, stats)
-        Split(feature, value, acc, Group.minus(total, acc))
+    statsList.map{case (value, stats) =>
+      lte = Monoid.plus(lte, stats)
+      val gt = Group.minus(total, lte)
+
+      object LTE extends Function1[Short,Boolean] {
+        def apply(v : Short) = v <= value
+        override def toString = "<= " + value.toString
       }
+
+      object GT extends Function1[Short,Boolean] {
+        def apply(v : Short) = v > value
+        override def toString = "> " + value.toString
+      }
+
+      val llr = likelihoodRatio(lte._1, (lte._1 + lte._2), gt._1, (gt._1 + gt._2))
+
+      Split(llr, List(LTE -> lte,GT -> gt))
     }
-
-  def extendTree(split : Split, leaf : Node[String,Short]) = split.extend(leaf)
-}
-
-case class Split(feature : String, value : Short, lte: (Long,Long), gt: (Long,Long)) {
-
-  def llr = likelihoodRatio(lte._1, (lte._1 + lte._2), gt._1, (gt._1 + gt._2))
+  }
 
   def likelihoodRatio(k1 : Long, n1 : Long, k2 : Long, n2 : Long) = {
     def kLogP(k : Long, p : Double) = if(k == 0) 0 else k * math.log(p)
@@ -62,20 +67,5 @@ case class Split(feature : String, value : Short, lte: (Long,Long), gt: (Long,Lo
     val p2 = k2.toDouble / n2.toDouble
     val p = (k1 + k2).toDouble / (n1 + n2).toDouble
     logL(p1, k1, n1) + logL(p2, k2, n2) - logL(p, k1, n1) - logL(p, k2, n2)
-  }
-
-  object LTE extends Function1[Short,Boolean] {
-    def apply(v : Short) = v <= value
-    override def toString = "<= " + value.toString
-  }
-
-  object GT extends Function1[Short,Boolean] {
-    def apply(v : Short) = v > value
-    override def toString = "> " + value.toString
-  }
-
-  def extend(parent : Node[String,Short]) : List[Node[String,Short]] = {
-    List(SplitNode[String,Short](parent, feature, LTE),
-         SplitNode[String,Short](parent, feature, GT))
   }
 }
