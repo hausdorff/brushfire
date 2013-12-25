@@ -24,29 +24,20 @@ case class SplitNode[K,V]
 }
 
 case class Tree[K,V,O](leaves : Seq[(Node[K,V],O)])(implicit m : Monoid[O]) {
-  type N = Node[K,V]
+  def allNodes = leaves.map{_._1}.toSet.flatMap{n : Node[K,V] => n.withAncestors}
 
-  def allNodes = leaves.map{_._1}.toSet.flatMap{n : N => n.withAncestors}
-
-  def dump {
+  def depthFirst(fn : (Int,Node[K,V])=>Unit){
     val childMap = com.twitter.algebird.Monoid.sum(allNodes.map{
-      case Root() => Map[N,Set[N]]()
-      case n : SplitNode[K,V] => Map(n.parent -> Set[N](n))
+      case Root() => Map[Node[K,V],Set[Node[K,V]]]()
+      case n : SplitNode[K,V] => Map(n.parent -> Set[Node[K,V]](n))
     })
-    dumpMap(childMap, Root[K,V], 0)
-  }
 
-  def dumpMap(map : Map[N,Set[N]], root : N, indent : Int) {
-    print(" " * indent)
-    root match {
-      case Root() => println("root")
-      case SplitNode(_, f, pred) => {
-        print(f)
-        print(": ")
-        println(pred)
-      }
+    def depthFirstFrom(n : Node[K,V], level : Int) {
+      fn(level, n)
+      childMap.get(n).foreach{s => s.foreach{c => depthFirstFrom(c, level + 1)}}
     }
-    map.getOrElse(root, Set[N]()).foreach{c => dumpMap(map, c, indent+1)}
+
+    depthFirstFrom(Root[K,V], 0)
   }
 }
 

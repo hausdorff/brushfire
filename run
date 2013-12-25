@@ -1,1 +1,1 @@
-java -cp "target/runtime/*:target/classes" com.twitter.scalding.Tool com.avibryant.brushfire.TestJob --local --input data
+java -cp "target/runtime/*:target/classes" com.twitter.scalding.Tool com.avibryant.brushfire.TestJob --local --input data --output tree && cat tree

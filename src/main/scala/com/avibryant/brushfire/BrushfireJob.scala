@@ -4,33 +4,37 @@ import com.twitter.scalding._
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
-trait Learner[V,L,S,O] {
-  def statsSemigroup : Semigroup[S]
-  def predictionMonoid : Monoid[O]
-
-  def buildStats(value : V, label : L) : S
-  def findSplits(stats : S) : Iterable[Split[V,O]]
-}
-
-trait Scorer[L,O,C] {
-  def scoreSemigroup : Semigroup[C]
-
-  def scoreLabel(label : L, prediction: O) : C
-}
-
-case class Split[V,O](goodness : Double, predicates : Iterable[(V=>Boolean,O)])
-
 trait BrushfireJob[K,V,L,S,O] extends Job {
   def learner : Learner[V,L,S,O]
 
+  def buildTreeNDeep(
+    n : Int,
+    trainingData : TypedPipe[(Map[K,V],L)])(implicit ko : Ordering[K])
+     = {
+      implicit val pm = learner.predictionMonoid
+      expandTreeNTimes(n, trainingData, LiteralValue(Tree.empty))
+  }
+
+  def expandTreeNTimes(
+    n : Int,
+    trainingData : TypedPipe[(Map[K,V],L)],
+    tree : ValuePipe[Tree[K,V,O]])(implicit ko : Ordering[K]) : ValuePipe[Tree[K,V,O]]
+     = {
+
+      if(n > 0)
+        expandTreeNTimes(n - 1, trainingData, expandTree(trainingData, tree))
+      else
+        tree
+  }
+
   def expandTree(
-    trainingData: TypedPipe[(Map[K,V],L)],
+    trainingData : TypedPipe[(Map[K,V],L)],
     tree : ValuePipe[Tree[K,V,O]])(implicit ko : Ordering[K])
-     : ValuePipe[Tree[K,V,O]] = {
+      = {
 
       implicit val ss = learner.statsSemigroup
-      implicit val pm = learner.predictionMonoid
       implicit val splitSemigroup = Semigroup.from[(K,Split[V,O])]{(a,b) => if(a._2.goodness > b._2.goodness) a else b}
+      implicit val pm = learner.predictionMonoid
 
       val newTree =
         trainingData
