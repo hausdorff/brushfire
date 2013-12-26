@@ -1,0 +1,3 @@
+#!/bin/sh
+java -cp "../target/runtime/*:../target/classes" com.twitter.scalding.Tool com.avibryant.brushfire.example.IrisJob --local --target Iris-setosa --input iris.data --output setosa.tree && \
+java -cp "../target/runtime/*:../target/classes" com.twitter.scalding.Tool com.avibryant.brushfire.example.IrisJob --local --target Iris-virginica --input iris.data --output virginica.tree

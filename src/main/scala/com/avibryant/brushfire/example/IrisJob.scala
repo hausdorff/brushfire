@@ -1,9 +1,11 @@
-package com.avibryant.brushfire
+package com.avibryant.brushfire.example
 
+import com.avibryant.brushfire._
 import com.twitter.scalding._
 
-class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
+class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
   val depth = args.getOrElse("depth", "3").toInt
+  val target = args.required("target")
 
   lazy val learner = new BinaryLLRLearner[Short]
 
@@ -16,10 +18,12 @@ class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
     .map{tree => printTree(tree)}
     .write(TypedTsv[String](args("output")))
 
+  val cols = List("petal-width", "petal-length", "sepal-width", "sepal-length")
   def parseTrainingData(line : String) = {
-    val shorts = line.split("\t").map{_.toShort}.toList
-    val label = (shorts.head == 1)
-    (Map(shorts.tail.zipWithIndex.map{case (v,i) => ("abcdefg"(i).toString, v)} : _*), label)
+    val parts = line.split(",").reverse.toList
+    val label = parts.head == target
+    val shorts = parts.tail.map{s => (s.toDouble * 10).toShort}
+    (Map(cols.zip(shorts) : _*), label)
   }
 
   def printTree(tree : Tree[String,Short,(Long,Long)]) : String = {
@@ -33,7 +37,7 @@ class TestJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
           sb ++= f
           sb ++= ": "
           sb ++= pred.toString
-          sb ++= "\n"
+          sb ++= "mm\n"
         }
       }
     }
