@@ -9,6 +9,16 @@ The basic approach to distributed tree learning is inspired by Google's PLANET, 
 
 **Both the framework and these docs are woefully incomplete, but hopefully give a flavor of how it works (or is meant to work).**
 
+## Quick start
+
+````
+mvn compile
+cd example
+./iris
+cat setosa.tree
+cat virginica.tree
+````
+
 ## Inputs to the framework
 
 Building a tree requires the following things:
