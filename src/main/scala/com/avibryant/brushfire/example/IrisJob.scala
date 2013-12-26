@@ -42,7 +42,7 @@ class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
       }
 
       val (good,bad) = prediction
-      sb ++= " (" + good.toString + "/" + (good+bad).toString + ")"
+      sb ++= " (" + good.toString + "," + bad.toString + ")"
       sb ++= "\n"
     }
 
