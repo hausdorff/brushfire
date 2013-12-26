@@ -29,17 +29,21 @@ class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
   def printTree(tree : Tree[String,Short,(Long,Long)]) : String = {
     val sb = new StringBuilder
 
-    tree.depthFirst{(level, node) =>
+    tree.depthFirst{(level, node, prediction) =>
       sb ++= (" " * level)
       node match {
-        case Root() => sb ++= ("root\n")
+        case Root() => sb ++= ("root")
         case SplitNode(_, f, pred) => {
           sb ++= f
           sb ++= ": "
           sb ++= pred.toString
-          sb ++= "mm\n"
+          sb ++= "mm"
         }
       }
+
+      val (good,bad) = prediction
+      sb ++= " (" + good.toString + "/" + (good+bad).toString + ")"
+      sb ++= "\n"
     }
 
     sb.toString

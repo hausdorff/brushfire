@@ -16,23 +16,27 @@ class BinaryLLRLearner[V](implicit
     val statsList = stats.toList.sortBy{_._1}
     var lte = (0L,0L)
 
-    statsList.map{case (value, stats) =>
-      lte = Monoid.plus(lte, stats)
-      val gt = Group.minus(total, lte)
+    if(total._1 > 0 && total._2 > 0) {
+      statsList.map{case (value, stats) =>
+        lte = Monoid.plus(lte, stats)
+        val gt = Group.minus(total, lte)
 
-      object LTE extends Function1[V,Boolean] {
-        def apply(v : V) = ordering.lteq(v, value)
-        override def toString = "<= " + value.toString
+        object LTE extends Function1[V,Boolean] {
+          def apply(v : V) = ordering.lteq(v, value)
+          override def toString = "<= " + value.toString
+        }
+
+        object GT extends Function1[V,Boolean] {
+          def apply(v : V) = ordering.gt(v, value)
+          override def toString = "> " + value.toString
+        }
+
+        val llr = likelihoodRatio(lte._1, (lte._1 + lte._2), gt._1, (gt._1 + gt._2))
+
+        Split(llr, List(LTE -> lte,GT -> gt))
       }
-
-      object GT extends Function1[V,Boolean] {
-        def apply(v : V) = ordering.gt(v, value)
-        override def toString = "> " + value.toString
-      }
-
-      val llr = likelihoodRatio(lte._1, (lte._1 + lte._2), gt._1, (gt._1 + gt._2))
-
-      Split(llr, List(LTE -> lte,GT -> gt))
+    } else {
+      List(Split(0.0, Nil))
     }
   }
 

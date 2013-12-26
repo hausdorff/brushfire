@@ -26,14 +26,19 @@ case class SplitNode[K,V]
 case class Tree[K,V,O](leaves : Seq[(Node[K,V],O)])(implicit m : Monoid[O]) {
   def allNodes = leaves.map{_._1}.toSet.flatMap{n : Node[K,V] => n.withAncestors}
 
-  def depthFirst(fn : (Int,Node[K,V])=>Unit){
-    val childMap = com.twitter.algebird.Monoid.sum(allNodes.map{
+  def depthFirst(fn : (Int,Node[K,V],O)=>Unit){
+    val childMap = Monoid.sum(allNodes.map{
       case Root() => Map[Node[K,V],Set[Node[K,V]]]()
       case n : SplitNode[K,V] => Map(n.parent -> Set[Node[K,V]](n))
     })
 
+    var predictionMap = Monoid.sum(leaves.map{
+      case (node,prediction) =>
+      Map(node.withAncestors.toList.map{n => (n,prediction)} : _*)
+    })
+
     def depthFirstFrom(n : Node[K,V], level : Int) {
-      fn(level, n)
+      fn(level, n, predictionMap(n))
       childMap.get(n).foreach{s => s.foreach{c => depthFirstFrom(c, level + 1)}}
     }
 

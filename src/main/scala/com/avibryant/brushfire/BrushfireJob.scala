@@ -61,12 +61,13 @@ trait BrushfireJob[K,V,L,S,O] extends Job {
                 .zipWithIndex
                 .flatMap{case((leaf,prediction),index) =>
                   map.get(index) match {
-                    case Some((feature,split)) => split.predicates.map{
+                    case None => List(leaf -> prediction)
+                    case Some((feature,Split(_,Nil))) => List(leaf -> prediction)
+                    case Some((feature,Split(_,predicates))) => predicates.map{
                       case (predicate,prediction) =>
                         val node = SplitNode(leaf, feature, predicate)
                         node -> prediction
-                      }
-                    case None => List(leaf -> prediction)
+                    }
                   }
                 }
 
