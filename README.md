@@ -12,7 +12,7 @@ The basic approach to distributed tree learning is inspired by Google's PLANET, 
 ## Quick start
 
 ````
-mvn compile
+mvn package
 cd example
 ./iris
 cat setosa.tree
