@@ -60,6 +60,7 @@ That's a lot of type parameters, so let's summarize:
 - S:Semigroup - Aggregate stats mapping values to labels for a single feature. Generally some kind of approximation of the joint distribution of the feature values and the label. Example: Map[Double,Map[Boolean,Long]]
 - O:Monoid - Prediction. Used to predict the label for a new observation. Generally some kind of approximation of the distribution of the label. It's a monoid so that we can store predictions for only the leaves, but derive them for interior nodes through aggregation. Example: Map[Boolean,Double]
 - C:Semigroup - Score. Used to measure how good the predictions are. Example:
+
 ````scala
 case class BinaryScore(
   truePositives: Long,
@@ -79,7 +80,7 @@ Trees are built breadth first, one level at a time. Building each level uses two
 - Now, from the aggregated stats, find all the candidate splits for each (leaf,feature). Emit (leaf,split) pairs.
 - In the combine/reduce phase, just pick the best split for each leaf. Most of that can happen on the map side, so it's cheap to use a single reducer which will end up with the best split for all leaves. This reducer can create a new level for the tree based on those splits.
 
-Actually, the above is a simplification: Brushfire assumes you want to do k-fold cross validation, and so it builds k trees in parallel, each one using (k-1)/k of the training data. The held back 1/k is then scored against its corresponding tree, and the total score across all folds is reported.
+Actually, the above is a simplification: Brushfire assumes you want to do k-fold cross validation, and so it builds k trees in parallel, each one using (k-1)/k of the training data. At the end, a final map reduce step scores the held back 1/k against its corresponding tree, and the total score across all folds is reported.
 
 ## TODO
 
