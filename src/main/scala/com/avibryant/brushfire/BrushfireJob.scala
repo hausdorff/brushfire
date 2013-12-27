@@ -2,7 +2,6 @@ package com.avibryant.brushfire
 
 import com.twitter.scalding._
 import com.twitter.algebird._
-import com.twitter.scalding.typed.{ ValuePipe, ComputedValue, LiteralValue }
 
 trait BrushfireJob[K, V, L, S, O, C] extends Job {
   def learner: Learner[V, L, S, O]
@@ -81,7 +80,7 @@ trait BrushfireJob[K, V, L, S, O, C] extends Job {
 
   def scoreTrees(
     trainingData: TypedPipe[(Int, Map[K, V], L)],
-    trees: TypedPipe[(Int, Tree[K, V, O])]): ValuePipe[C] = {
+    trees: TypedPipe[(Int, Tree[K, V, O])]) = {
     implicit val ss = scorer.scoreSemigroup
 
     trainingData
