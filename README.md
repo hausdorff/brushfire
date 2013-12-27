@@ -48,7 +48,7 @@ That's a lot of type parameters, so let's summarize:
 - V - Values of features. Example: Double
 - L - Labels we're trying to predict. Example: Boolean
 - S:Semigroup - Aggregate stats mapping values to labels for a single feature. Generally some kind of approximation of the joint distribution of the feature values and the label. Example: Map[Double,Map[Boolean,Long]]
-- O - Prediction. Used to predict the label for a new observation. Generally some kind of approximation of the distribution of the label. Example: Map[Boolean,Double]
+- O:Monoid - Prediction. Used to predict the label for a new observation. Generally some kind of approximation of the distribution of the label. It's a monoid so that we can store predictions for only the leaves, but derive them for interior nodes through aggregation. Example: Map[Boolean,Double]
 
 One big weakness to note in this model is that it assumes that for a given job, all features have the same value type, V (and similarly that they get with the same stats type, S). Since you often want models with mixed feature types (some numeric and some categorical, say), in practice V and S will probably be abstract roots of case class hierarchies which wrap multiple "real" value types. That's annoying, but it's not clear how to make Scala happy any other way.
 
