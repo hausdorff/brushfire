@@ -5,7 +5,7 @@ import com.twitter.scalding._
 
 class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
   val depth = args.getOrElse("depth", "3").toInt
-  val folds = args.getOrElse("folds", "10").toInt
+  val folds = args.getOrElse("folds", "2").toInt
   val target = args.required("target")
 
   lazy val learner = new BinaryLLRLearner[Short]

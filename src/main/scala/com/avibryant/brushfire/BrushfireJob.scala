@@ -4,27 +4,28 @@ import com.twitter.scalding._
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
-trait BrushfireJob[K,V,L,S,O] extends Job {
+trait BrushfireJob[K,V,L,S,O,C] extends Job {
   def learner : Learner[V,L,S,O]
 
-  def buildTreesToDepth(
+  def learn(
     depth : Int,
     folds : Int,
-    trainingData : TypedPipe[(Map[K,V],L)])(implicit ko : Ordering[K])
-     = {
+    trainingData : TypedPipe[(Map[K,V],L)])
+    (implicit ko : Ordering[K]) = {
       implicit val pm = learner.predictionMonoid
       lazy val rand = new scala.util.Random
       val withFolds = trainingData.map{case (row,label) => (rand.nextInt(folds),row,label)}
       val emptyTrees = TypedPipe.from((0.to(folds-1).toList.map{(_,Tree.empty[K,V,O])}))
-      expandTreesToDepth(depth, withFolds, emptyTrees)
+      val fullTrees = expandTreesToDepth(depth, withFolds, emptyTrees)
+      scoreTrees(
   }
 
   def expandTreesToDepth(
     depth : Int,
     trainingData : TypedPipe[(Int, Map[K,V],L)],
     trees : TypedPipe[(Int,Tree[K,V,O])])
-    (implicit ko : Ordering[K]) : TypedPipe[(Int,Tree[K,V,O])]
-     = {
+    (implicit ko : Ordering[K])
+    : TypedPipe[(Int,Tree[K,V,O])] = {
       if(depth > 0)
         expandTreesToDepth(depth - 1, trainingData, expandTrees(trainingData, trees))
       else
@@ -32,8 +33,8 @@ trait BrushfireJob[K,V,L,S,O] extends Job {
   }
 
   def expandTrees(trainingData : TypedPipe[(Int,Map[K,V],L)],
-    trees : TypedPipe[(Int,Tree[K,V,O])])(implicit ko : Ordering[K])
-      = {
+    trees : TypedPipe[(Int,Tree[K,V,O])])
+    (implicit ko : Ordering[K]) = {
 
       implicit val ss = learner.statsSemigroup
       implicit val splitSemigroup = Semigroup.from[(K,Split[V,O])]{(a,b) => if(a._2.goodness > b._2.goodness) a else b}
@@ -76,6 +77,15 @@ trait BrushfireJob[K,V,L,S,O] extends Job {
         }
     }
 
+  def scoreTrees(
+        trainingData : TypedPipe[(Int, Map[K,V],L)],
+        trees : TypedPipe[(Int,Tree[K,V,O])])
+        : TypedPipe[(Int,Tree[K,V,O], C)] = {
+          trainingData
+            .cross(trees)
+            .map{case ((testFold, row, label), (treeFold, tree))}
+      }
+
   def leafIndexFor(row : Map[K,V], tree : Tree[K,V,O]) : Iterable[Int] =
     tree
       .leaves
@@ -83,4 +93,7 @@ trait BrushfireJob[K,V,L,S,O] extends Job {
       .find{case ((leaf,prediction), index) => leaf.includes(row)}
       .map{_._2}
       .toList
+
+
+
 }
