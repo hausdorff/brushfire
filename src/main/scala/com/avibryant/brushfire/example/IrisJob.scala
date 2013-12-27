@@ -5,6 +5,7 @@ import com.twitter.scalding._
 
 class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
   val depth = args.getOrElse("depth", "3").toInt
+  val folds = args.getOrElse("folds", "10").toInt
   val target = args.required("target")
 
   lazy val learner = new BinaryLLRLearner[Short]
@@ -14,8 +15,8 @@ class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
       .from(TextLine(args("input")))
       .map{line => parseTrainingData(line)}
 
-  buildTreeNDeep(depth, trainingData)
-    .map{tree => printTree(tree)}
+  buildTreesToDepth(depth, folds, trainingData)
+    .map{case (fold,tree) => "Fold " + fold.toString + "\n" + printTree(tree)}
     .write(TypedTsv[String](args("output")))
 
   val cols = List("petal-width", "petal-length", "sepal-width", "sepal-length")
