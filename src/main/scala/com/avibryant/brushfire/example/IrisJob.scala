@@ -3,21 +3,30 @@ package com.avibryant.brushfire.example
 import com.avibryant.brushfire._
 import com.twitter.scalding._
 
-class IrisJob(args: Args) extends Job(args) with BrushfireJob[String, Short, Boolean, Map[Short, (Long, Long)], (Long, Long)] {
+class IrisJob(args: Args)
+    extends Job(args)
+    with BrushfireJob[String, Short, Boolean, Map[Short, (Long, Long)], (Long, Long), BinaryScore] {
   val depth = args.getOrElse("depth", "3").toInt
   val folds = args.getOrElse("folds", "2").toInt
   val target = args.required("target")
 
   lazy val learner = new BinaryLLRLearner[Short]
+  lazy val scorer = new BinaryScorer
 
   val trainingData =
     TypedPipe
       .from(TextLine(args("input")))
       .map { line => parseTrainingData(line) }
 
-  buildTreesToDepth(depth, folds, trainingData)
+  val (trees, score) = learn(depth, folds, trainingData)
+
+  trees
     .map { case (fold, tree) => "Fold " + fold.toString + "\n" + printTree(tree) }
     .write(TypedTsv[String](args("output")))
+
+  score
+    .map { _.toString }
+    .write(TypedTsv[String](args("output") + ".score"))
 
   val cols = List("petal-width", "petal-length", "sepal-width", "sepal-length")
   def parseTrainingData(line: String) = {
