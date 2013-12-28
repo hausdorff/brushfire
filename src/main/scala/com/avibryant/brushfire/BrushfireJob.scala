@@ -3,6 +3,16 @@ package com.avibryant.brushfire
 import com.twitter.scalding._
 import com.twitter.algebird._
 
+/** General template for a fully-specified Brushfire job.
+  *
+  * @tparam K Defines ordering for features in the model.
+  * @tparam V Type of incoming data.
+  * @tparam L Type of label given to data.
+  * @tparam S Type of statistic aggregated (e.g., an approximation of the joint
+  * distribution).
+  * @tparam O Type of output (i.e., prediction).
+  * @tparam E Type of error aggregated (e.g., a confusion matrix).
+  */
 trait BrushfireJob[K, V, L, S, O, E] extends Job {
   def learner: Learner[V, L, S, O, E]
 
