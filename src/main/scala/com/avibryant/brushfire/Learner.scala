@@ -20,13 +20,17 @@ import com.twitter.algebird._
   * @tparam L Type of label given to data.
   * @tparam S Type of statistic aggregated (e.g., a word count).
   * @tparam O Type of output (i.e., prediction).
+  * @tparam E Type of error aggregated (e.g., a confusion matrix).
   */
-trait Learner[V,L,S,O] {
-  def statsSemigroup : Semigroup[S]
-  def predictionMonoid : Monoid[O]
+trait Learner[V, L, S, O, E] {
+  def statsSemigroup: Semigroup[S]
+  def predictionMonoid: Monoid[O]
+  def errorSemigroup: Semigroup[E]
 
-  def buildStats(value : V, label : L) : S
-  def findSplits(stats : S) : Iterable[Split[V,O]]
+  def shouldSplit(prediction: O): Boolean
+  def buildStats(value: V, label: L): S
+  def findSplits(stats: S): Iterable[Split[V, O]]
+  def findError(label: L, prediction: O): E
 }
 
 /** A `Split` provides a methodology for partitioning your data (via `predicates`)
@@ -40,16 +44,4 @@ trait Learner[V,L,S,O] {
   * @param predicates A series of predicates used to determine which partition a
   * datum belongs to (i.e., which branch to go to next during prediction).
   */
-case class Split[V,O](goodness : Double, predicates : Iterable[(V=>Boolean,O)])
-
-/** Scores how well predictions match up with a label.
-  * 
-  * @tparam L Type of label given to data.
-  * @tparam O Type of output (i.e., prediction).
-  * @tparam C Type of score aggregated (e.g., a percentage).
-  */
-trait Scorer[L,O,C] {
-  def scoreSemigroup : Semigroup[C]
-
-  def scoreLabel(label : L, prediction: O) : C
-}
+case class Split[V, O](goodness: Double, predicates: Iterable[(V => Boolean, O)])

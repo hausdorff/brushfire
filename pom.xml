@@ -76,6 +76,22 @@
         </execution>
       </executions>
     </plugin>
+
+    <plugin>
+      <groupId>org.scalariform</groupId>
+      <artifactId>scalariform-maven-plugin</artifactId>
+      <version>0.1.4</version>
+      <executions>
+        <execution>
+          <phase>process-sources</phase>
+          <goals>
+            <goal>format</goal>
+          </goals>
+          <configuration>
+          </configuration>
+        </execution>
+      </executions>
+    </plugin>
     </plugins>
   </build>
 
