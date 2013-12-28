@@ -6,7 +6,7 @@ import com.twitter.scalding._
 
 class IrisJob(args: Args)
     extends Job(args)
-    with BrushfireJob[String, Short, Boolean, Map[Short, (Long, Long)], (Long, Long), ConfusionMatrix[Boolean]] {
+    with BrushfireJob[String, Short, Boolean, CrossTab[Short, Boolean], BooleanPrediction, ConfusionMatrix[Boolean]] {
   //
   // Parameterize learner
   //
@@ -48,7 +48,7 @@ class IrisJob(args: Args)
   //
   // Output data
   //
-  def printTree(tree: Tree[String, Short, (Long, Long)]): String = {
+  def printTree(tree: Tree[String, Short, BooleanPrediction]): String = {
     val sb = new StringBuilder
 
     tree.depthFirst { (level, node, prediction) =>
@@ -63,8 +63,7 @@ class IrisJob(args: Args)
         }
       }
 
-      val (good, bad) = prediction
-      sb ++= " (" + good.toString + "," + bad.toString + ")"
+      sb ++= " (" + prediction.trueFrequency.toString + "," + prediction.falseFrequency.toString + ")"
       sb ++= "\n"
     }
 

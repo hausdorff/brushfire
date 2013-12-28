@@ -9,6 +9,12 @@ case class CrossTab[V, L](map: Map[(V, L), Long]) {
   def row(v: V) = map.collect { case ((vv, l), c) if v == vv => (l, c) }
   def columnTotals = Map(columnKeys.map { l => l -> column(l).values.sum }: _*)
   def rowTotals = Map(rowKeys.map { v => v -> row(v).values.sum }: _*)
+
+  def partition[V2](fn: V => V2) = {
+    CrossTab(map.foldLeft(Map[(V2, L), Long]()) { (acc, pair) =>
+      Semigroup.plus(acc, Map((fn(pair._1._1), pair._1._2) -> pair._2))
+    })
+  }
 }
 
 object CrossTab {
