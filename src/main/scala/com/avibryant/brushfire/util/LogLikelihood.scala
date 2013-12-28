@@ -2,7 +2,17 @@ package com.avibryant.brushfire.util
 
 object LogLikelihood {
 
-  def likelihoodRatio[N](k1: N, n1: N, k2: N, n2: N)(implicit n: Numeric[N]) = {
+  def likelihoodRatio(crossTab: CrossTab[Boolean, Boolean]): Double = {
+    val totals = crossTab.rowTotals
+    val goods = crossTab.column(true)
+    likelihoodRatio(
+      goods.getOrElse(true, 0L),
+      totals.getOrElse(true, 0L),
+      goods.getOrElse(false, 0L),
+      totals.getOrElse(false, 0L))
+  }
+
+  def likelihoodRatio[N](k1: N, n1: N, k2: N, n2: N)(implicit n: Numeric[N]): Double = {
 
     val kd1 = n.toDouble(k1)
     val kd2 = n.toDouble(k2)
