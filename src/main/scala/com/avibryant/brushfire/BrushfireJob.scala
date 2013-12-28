@@ -4,6 +4,14 @@ import com.twitter.scalding._
 import com.twitter.algebird._
 import com.twitter.scalding.typed.{ValuePipe, ComputedValue, LiteralValue}
 
+/** General template for a fully-specified Brushfire job.
+  *
+  * @tparam K Defines ordering for features in the model.
+  * @tparam V Type of incoming data.
+  * @tparam L Type of label given to data.
+  * @tparam S Type of statistic aggregated (e.g., a word count)
+  * @tparam O Type of output (i.e., prediction)
+  */
 trait BrushfireJob[K,V,L,S,O] extends Job {
   def learner : Learner[V,L,S,O]
 

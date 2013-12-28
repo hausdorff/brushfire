@@ -4,12 +4,18 @@ import com.avibryant.brushfire._
 import com.twitter.scalding._
 
 class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Boolean, Map[Short,(Long,Long)], (Long,Long)] {
+  //
+  // Parameterize learner
+  //
   val depth = args.getOrElse("depth", "3").toInt
   val folds = args.getOrElse("folds", "10").toInt
   val target = args.required("target")
 
   lazy val learner = new BinaryLLRLearner[Short]
 
+  //
+  // Train learner
+  //
   val trainingData =
     TypedPipe
       .from(TextLine(args("input")))
@@ -19,6 +25,9 @@ class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
     .map{case (fold,tree) => "Fold " + fold.toString + "\n" + printTree(tree)}
     .write(TypedTsv[String](args("output")))
 
+  //
+  // Wrangle and parse data
+  //
   val cols = List("petal-width", "petal-length", "sepal-width", "sepal-length")
   def parseTrainingData(line : String) = {
     val parts = line.split(",").reverse.toList
@@ -27,6 +36,9 @@ class IrisJob(args : Args) extends Job(args) with BrushfireJob[String,Short,Bool
     (Map(cols.zip(shorts) : _*), label)
   }
 
+  //
+  // Output data
+  //
   def printTree(tree : Tree[String,Short,(Long,Long)]) : String = {
     val sb = new StringBuilder
 
