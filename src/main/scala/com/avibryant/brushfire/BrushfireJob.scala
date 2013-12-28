@@ -3,9 +3,8 @@ package com.avibryant.brushfire
 import com.twitter.scalding._
 import com.twitter.algebird._
 
-trait BrushfireJob[K, V, L, S, O, C] extends Job {
-  def learner: Learner[V, L, S, O]
-  def scorer: Scorer[L, O, C]
+trait BrushfireJob[K, V, L, S, O, E] extends Job {
+  def learner: Learner[V, L, S, O, E]
 
   def learn(
     depth: Int,
@@ -16,7 +15,7 @@ trait BrushfireJob[K, V, L, S, O, C] extends Job {
     val withFolds = trainingData.map { case (row, label) => (rand.nextInt(folds), row, label) }
     val emptyTrees = TypedPipe.from((0.to(folds - 1).toList.map { (_, Tree.empty[K, V, O]) }))
     val fullTrees = expandTreesToDepth(depth, withFolds, emptyTrees)
-    (fullTrees, scoreTrees(withFolds, fullTrees))
+    (fullTrees, evaluateTrees(withFolds, fullTrees))
   }
 
   def expandTreesToDepth(
@@ -78,10 +77,10 @@ trait BrushfireJob[K, V, L, S, O, C] extends Job {
       }
   }
 
-  def scoreTrees(
+  def evaluateTrees(
     trainingData: TypedPipe[(Int, Map[K, V], L)],
     trees: TypedPipe[(Int, Tree[K, V, O])]) = {
-    implicit val ss = scorer.scoreSemigroup
+    implicit val es = learner.errorSemigroup
 
     trainingData
       .groupBy { _._1 }
@@ -92,7 +91,7 @@ trait BrushfireJob[K, V, L, S, O, C] extends Job {
           tree
             .leaves
             .find { _._1.includes(row) }
-            .map { case (leaf, prediction) => scorer.scoreLabel(label, prediction) }
+            .map { case (leaf, prediction) => learner.findError(label, prediction) }
       }
       .sum
   }

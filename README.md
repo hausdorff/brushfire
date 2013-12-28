@@ -29,26 +29,25 @@ Building a tree requires the following things:
 def trainingData[K:Ordering,V,L] : TypedPipe[(Map[K,V],L)]
 ````
 
-- A Learner that can produce and aggregate summary statistics for a feature given a value and a label, and can then produce candidate segmentations ("splits") based on those summary stats, and a numeric score (eg, a p-value) for how useful those splits are. In Scala terms:
+- A Learner that can:
+  - produce and aggregate summary statistics for a feature given a value and a label
+  - produce candidate segmentations ("splits") based on those summary stats, with predictions for each segment
+  - produce numeric scores (eg, p-value) for how useful those splits are
+  - finally, compute an error given a prediction and a known label
+
+In Scala terms:
 
 ````scala
 case class Split[V,O](goodness : Double, predicates : Iterable[(V=>Boolean,O)])
 
-trait Learner[V,L,S,O]
+trait Learner[V,L,S,O,E]
   def statsSemigroup : Semigroup[S]
+  def predictionMonoid: Monoid[O]
+  def errorSemigroup: Semigroup[E]
 
   def buildStats(value : V, label : L) : S
   def findSplits(stats : S) : Iterable[Split[V,O]]
-}
-````
-
-- A Scorer that can take a label from the training data, and a prediction from the learned tree, and produce some score of how well the prediction matched the label. It has to be possible to aggregate the score across the whole input set. So:
-
-````scala
-trait Scorer[L, O, C] {
-  def scoreSemigroup: Semigroup[C]
-
-  def scoreLabel(label: L, prediction: O): C
+  def findError(label: L, prediction: O) : E
 }
 ````
 
@@ -58,16 +57,8 @@ That's a lot of type parameters, so let's summarize:
 - V - Values of features. Example: Double
 - L - Labels we're trying to predict. Example: Boolean
 - S:Semigroup - Aggregate stats mapping values to labels for a single feature. Generally some kind of approximation of the joint distribution of the feature values and the label. Example: Map[Double,Map[Boolean,Long]]
-- O:Monoid - Prediction. Used to predict the label for a new observation. Generally some kind of approximation of the distribution of the label. It's a monoid so that we can store predictions for only the leaves, but derive them for interior nodes through aggregation. Example: Map[Boolean,Double]
-- C:Semigroup - Score. Used to measure how good the predictions are. Example:
-
-````scala
-case class BinaryScore(
-  truePositives: Long,
-  trueNegatives: Long,
-  falsePositives: Long,
-  falseNegatives: Long)
-````
+- O:Monoid - Prediction. Used to predict the label for a new observation. Generally some kind of approximation of the distribution of the label. It's a monoid so that we can store predictions for only the leaves, but derive them for interior nodes through aggregation. Example: Map[Boolean,Long]
+- E:Semigroup - Error. Used to measure how good the predictions are. This needs to be aggregated over all instances, so will often be represented as something like a confusion matrix. Example: Map[(Boolean,Boolean),Long]
 
 One big weakness to note in this model is that it assumes that for a given job, all features have the same value type, V (and similarly that they get with the same stats type, S). Since you often want models with mixed feature types (some numeric and some categorical, say), in practice V and S will probably be abstract roots of case class hierarchies which wrap multiple "real" value types. That's annoying, but it's not clear how to make Scala happy any other way.
 
@@ -80,7 +71,7 @@ Trees are built breadth first, one level at a time. Building each level uses two
 - Now, from the aggregated stats, find all the candidate splits for each (leaf,feature). Emit (leaf,split) pairs.
 - In the combine/reduce phase, just pick the best split for each leaf. Most of that can happen on the map side, so it's cheap to use a single reducer which will end up with the best split for all leaves. This reducer can create a new level for the tree based on those splits.
 
-Actually, the above is a simplification: Brushfire assumes you want to do k-fold cross validation, and so it builds k trees in parallel, each one using (k-1)/k of the training data. At the end, a final map reduce step scores the held back 1/k against its corresponding tree, and the total score across all folds is reported.
+Actually, the above is a simplification: Brushfire assumes you want to do k-fold cross validation, and so it builds k trees in parallel, each one using (k-1)/k of the training data. At the end, a final map reduce step finds the error for the held back 1/k against its corresponding tree, and the total error across all folds is reported.
 
 ## TODO
 
